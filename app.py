@@ -1,19 +1,12 @@
+import os
 import streamlit as st
-import logging
-from transformers import BertForQuestionAnswering, BertTokenizer, pipeline
 import PyPDF2
-from io import BytesIO
+from groq import Groq
 
-# Suppress transformer-related warnings
-logging.getLogger("transformers").setLevel(logging.ERROR)
-
-# Load the BERT model and tokenizer for question answering
-model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
-tokenizer = BertTokenizer.from_pretrained(model_name)
-model = BertForQuestionAnswering.from_pretrained(model_name)
-
-# Create a pipeline for QA
-qa_pipeline = pipeline('question-answering', model=model, tokenizer=tokenizer)
+# Set up Groq API client
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY"),
+)
 
 # Function to extract text from PDF
 def extract_text_from_pdf(file):
@@ -23,13 +16,12 @@ def extract_text_from_pdf(file):
         text += pdf_reader.pages[page].extract_text()
     return text
 
-# Streamlit UI
-st.title('Legal Document Question Answering')
+# Streamlit UI setup
+st.title('Legal Document Question Answering with Groq API')
 
 st.markdown("""
 This app allows you to upload legal documents (e.g., Companies Act 1984) in PDF format
-and ask questions related to the document. The model used is BERT-based, fine-tuned on 
-the SQuAD dataset, which allows it to answer questions based on the uploaded document.
+and ask questions related to the document using Groq's language model.
 """)
 
 # File uploader
@@ -44,14 +36,17 @@ if uploaded_file is not None:
     question = st.text_input("Ask a question based on the document:")
 
     if question:
-        # Get the answer from the model
-        result = qa_pipeline({
-            'context': document_text,
-            'question': question
-        })
+        # Use Groq API to get the answer based on the uploaded document text
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "user", "content": f"Answer the following question based on the document: {question}"},
+                {"role": "system", "content": f"The context is: {document_text}"},
+            ],
+            model="llama3-8b-8192",
+        )
 
-        # Display the answer
-        st.write(f"Answer: {result['answer']}")
+        # Display the answer from the Groq model
+        st.write(f"Answer: {chat_completion.choices[0].message.content}")
 
 # Example instructions
 st.markdown("""
