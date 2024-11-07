@@ -5,7 +5,7 @@ from groq import Groq
 
 # Set up Groq API client
 client = Groq(
-    api_key=os.environ.get("GROQ_API_KEY"),
+    api_key=os.environ.get("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"),
 )
 
 # Function to extract text from PDF
