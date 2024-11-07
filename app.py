@@ -4,7 +4,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from transformers import pipeline
 import streamlit as st
-from io import BytesIO
+import os
 
 # Step 1: Extract text from the uploaded PDF
 def extract_text_from_pdf(pdf_file):
@@ -35,16 +35,24 @@ def generate_answer(query, relevant_sections):
     answer = generator(input_text, max_length=100, num_return_sequences=1, truncation=True)
     return answer[0]['generated_text']
 
+# Function to load and process a PDF from the repo
+def load_document(doc_name):
+    file_path = os.path.join("documents", doc_name)  # Assuming PDFs are in a 'documents' folder
+    if os.path.exists(file_path):
+        return extract_text_from_pdf(file_path)
+    else:
+        return None
+
 # Streamlit UI setup
-st.title("Companies Act 1984 Query Assistant")
-st.write("Upload the Companies Act 1984 PDF to ask any question related to the document.")
+st.title("Document Query Assistant")
+st.write("Select a document and ask a question.")
 
-# Upload file
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+# Dropdown to select document
+doc_choice = st.selectbox("Choose a document:", ["Companies Act 1984.pdf", "Income Tax Ordinance.pdf"])
 
-if uploaded_file is not None:
-    # Extract text from the uploaded PDF
-    pdf_text = extract_text_from_pdf(uploaded_file)
+# Load the selected document
+pdf_text = load_document(doc_choice)
+if pdf_text:
     sections = pdf_text.split("\n")  # Split the text into sections or paragraphs
     embeddings = model.encode(sections)
 
@@ -62,3 +70,5 @@ if uploaded_file is not None:
         answer = generate_answer(query, relevant_sections)
         st.write("**Answer:**")
         st.write(answer)  # Display the generated answer
+else:
+    st.write(f"Sorry, the document '{doc_choice}' could not be found.")
