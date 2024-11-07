@@ -1,57 +1,34 @@
 import os
 import streamlit as st
-import PyPDF2
 from groq import Groq
 
-# Set up Groq API client
-client = Groq(
-    api_key=os.environ.get("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"),
-)
+# Access API key securely using Streamlit's Secrets Manager
+api_key = st.secrets["groq"]["GROQ_API_KEY"]
 
-# Function to extract text from PDF
-def extract_text_from_pdf(file):
-    pdf_reader = PyPDF2.PdfReader(file)
-    text = ""
-    for page in range(len(pdf_reader.pages)):
-        text += pdf_reader.pages[page].extract_text()
-    return text
+# Initialize the Groq client with the API key
+client = Groq(api_key=api_key)
 
-# Streamlit UI setup
-st.title('Legal Document Question Answering with Groq API')
+# Function to get Groq API response
+def get_groq_response(question):
+    chat_completion = client.chat.completions.create(
+        messages=[{
+            "role": "user",
+            "content": question,
+        }],
+        model="llama3-8b-8192",  # Change model to your preferred choice
+    )
+    return chat_completion.choices[0].message.content
 
-st.markdown("""
-This app allows you to upload legal documents (e.g., Companies Act 1984) in PDF format
-and ask questions related to the document using Groq's language model.
-""")
+# Streamlit app layout
+st.title("Groq API Chatbot")
+st.write("Ask me anything related to the Companies Act or Income Tax Ordinance.")
 
-# File uploader
-uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
+# Get user input
+question = st.text_input("Ask a Question:")
 
-if uploaded_file is not None:
-    # Extract text from the uploaded PDF
-    document_text = extract_text_from_pdf(uploaded_file)
-    st.write("Document successfully uploaded and text extracted.")
-
-    # Allow the user to ask questions
-    question = st.text_input("Ask a question based on the document:")
-
-    if question:
-        # Use Groq API to get the answer based on the uploaded document text
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "user", "content": f"Answer the following question based on the document: {question}"},
-                {"role": "system", "content": f"The context is: {document_text}"},
-            ],
-            model="llama3-8b-8192",
-        )
-
-        # Display the answer from the Groq model
-        st.write(f"Answer: {chat_completion.choices[0].message.content}")
-
-# Example instructions
-st.markdown("""
-### Example Questions:
-- "What are the key responsibilities of directors?"
-- "What is the procedure for company registration?"
-- "Explain the rules for dissolution of a company."
-""")
+if question:
+    # Get the response from Groq API
+    response = get_groq_response(question)
+    st.write("Answer: ", response)
+else:
+    st.write("Please enter a question to get an answer.")
