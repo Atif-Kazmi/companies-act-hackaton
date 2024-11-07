@@ -1,74 +1,92 @@
-import PyPDF2
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from transformers import pipeline
-import streamlit as st
 import os
+import streamlit as st
+import PyPDF2
+from transformers import pipeline
+import requests
+from io import BytesIO
 
-# Step 1: Extract text from the uploaded PDF
-def extract_text_from_pdf(pdf_file):
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-    return text
+# Ensure PyTorch is installed and loaded correctly
+try:
+    import torch
+    print("PyTorch version:", torch.__version__)
+except ImportError:
+    st.error("PyTorch is not installed. Please install it by running `pip install torch`.")
+    raise
 
-# Step 2: Convert text into embeddings using Sentence-BERT
-model = SentenceTransformer('all-MiniLM-L6-v2')
+# Initialize a transformer-based pipeline for QA (RAG-style)
+qa_model = pipeline("question-answering")
 
-# Step 3: Setup the generative model (GPT-2 or GPT-Neo)
-generator = pipeline('text-generation', model='gpt2')  # Use GPT-2 for faster response
+# Function to extract text from PDF (from URL)
+def extract_text_from_pdf_from_url(pdf_url):
+    """Extract text from a PDF file URL."""
+    try:
+        response = requests.get(pdf_url)
+        response.raise_for_status()  # Check if the request was successful
+        file = BytesIO(response.content)
+        
+        # Read the PDF content using PyPDF2
+        reader = PyPDF2.PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to retrieve the PDF: {e}")
+        return ""
+    except Exception as e:
+        st.error(f"Failed to extract text from the PDF: {e}")
+        return ""
 
-# Function to perform the similarity search and limit the number of sections
-def search(query, sections, index):
-    query_embedding = model.encode([query])
-    _, indices = index.search(np.array(query_embedding, dtype=np.float32), k=5)  # Limit to top 5 sections
-    return [sections[idx] for idx in indices[0]]
+# Function to get the PDF URL from GitHub repo
+def get_pdf_url(doc_name):
+    """Construct the URL for the PDF stored in the GitHub repository."""
+    base_url = "https://raw.githubusercontent.com/your-username/your-repo-name/main/"
+    return base_url + doc_name
 
-# Function to generate an answer using the retrieved context
-def generate_answer(query, relevant_sections):
-    context = " ".join(relevant_sections[:5])  # Limit to top 5 sections for faster processing
-    input_text = f"Query: {query}\nContext: {context}\nAnswer:"
-    
-    # Generate answer with truncation and optimized max_length
-    answer = generator(input_text, max_length=100, num_return_sequences=1, truncation=True)
-    return answer[0]['generated_text']
+# Streamlit UI for file selection and question input
+st.title("Generative AI - Legal Query Assistant")
 
-# Function to load and process a PDF from the repo
-def load_document(doc_name):
-    file_path = os.path.join("documents", doc_name)  # Assuming PDFs are in a 'documents' folder
-    if os.path.exists(file_path):
-        return extract_text_from_pdf(file_path)
-    else:
-        return None
+# Dropdown for document selection
+documents = ["Companies Act 1984.pdf", "Income Tax Ordinance.pdf"]
+selected_doc = st.selectbox("Select a document to query", documents)
 
-# Streamlit UI setup
-st.title("Document Query Assistant")
-st.write("Select a document and ask a question.")
+# Construct the URL for the selected document
+pdf_url = get_pdf_url(selected_doc)
 
-# Dropdown to select document
-doc_choice = st.selectbox("Choose a document:", ["Companies Act 1984.pdf", "Income Tax Ordinance.pdf"])
+# Extract text from the selected document via URL
+document_text = extract_text_from_pdf_from_url(pdf_url)
 
-# Load the selected document
-pdf_text = load_document(doc_choice)
-if pdf_text:
-    sections = pdf_text.split("\n")  # Split the text into sections or paragraphs
-    embeddings = model.encode(sections)
-
-    # Create a FAISS index for similarity search
-    index = faiss.IndexFlatL2(embeddings.shape[1])  # L2 distance metric
-    index.add(np.array(embeddings, dtype=np.float32))
-
-    # User input for query
-    query = st.text_input("Enter your query:")
-
-    if query:
-        # Retrieve relevant sections from the document
-        relevant_sections = search(query, sections, index)
-        # Generate an answer using the relevant sections
-        answer = generate_answer(query, relevant_sections)
-        st.write("**Answer:**")
-        st.write(answer)  # Display the generated answer
+# Text input for asking questions about the selected document
+if document_text:
+    user_question = st.text_input("Ask a question about the selected document:")
+    if user_question:
+        # Using the transformer model to answer questions
+        try:
+            answer = qa_model(question=user_question, context=document_text)
+            st.write(f"Answer: {answer['answer']}")
+        except Exception as e:
+            st.error(f"Error processing your question: {e}")
 else:
-    st.write(f"Sorry, the document '{doc_choice}' could not be found.")
+    st.warning("No document loaded. Please select a document to proceed.")
+
+# Optional: Provide an upload option for users to add documents manually
+uploaded_file = st.file_uploader("Or upload your own PDF", type="pdf")
+if uploaded_file:
+    # Save the uploaded file to the local environment (this will not save to GitHub)
+    with open(f"uploaded_{uploaded_file.name}", "wb") as f:
+        f.write(uploaded_file.read())
+    st.success(f"File uploaded: {uploaded_file.name}")
+    
+    # Extract text from the newly uploaded file
+    uploaded_text = extract_text_from_pdf_from_url(f"uploaded_{uploaded_file.name}")
+    
+    if uploaded_text:
+        user_question = st.text_input("Ask a question about the uploaded document:")
+        if user_question:
+            try:
+                answer = qa_model(question=user_question, context=uploaded_text)
+                st.write(f"Answer: {answer['answer']}")
+            except Exception as e:
+                st.error(f"Error processing your question: {e}")
+else:
+    st.info("You can upload your own PDF file if needed.")
