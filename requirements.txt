@@ -5,3 +5,4 @@ transformers
 faiss-cpu
 numpy
 torch
+groq
