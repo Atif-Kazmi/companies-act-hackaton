@@ -18,19 +18,21 @@ def extract_text_from_pdf(pdf_file):
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Step 3: Setup the generative model (GPT-2 or GPT-Neo)
-generator = pipeline('text-generation', model='EleutherAI/gpt-neo-2.7B')
+generator = pipeline('text-generation', model='gpt2')  # Use GPT-2 for faster response
 
-# Function to perform the similarity search
+# Function to perform the similarity search and limit the number of sections
 def search(query, sections, index):
     query_embedding = model.encode([query])
-    _, indices = index.search(np.array(query_embedding, dtype=np.float32), k=3)  # Top 3 relevant sections
+    _, indices = index.search(np.array(query_embedding, dtype=np.float32), k=5)  # Limit to top 5 sections
     return [sections[idx] for idx in indices[0]]
 
 # Function to generate an answer using the retrieved context
 def generate_answer(query, relevant_sections):
-    context = " ".join(relevant_sections)  # Concatenate the retrieved sections
+    context = " ".join(relevant_sections[:5])  # Limit to top 5 sections for faster processing
     input_text = f"Query: {query}\nContext: {context}\nAnswer:"
-    answer = generator(input_text, max_length=150, num_return_sequences=1)
+    
+    # Generate answer with truncation and optimized max_length
+    answer = generator(input_text, max_length=100, num_return_sequences=1, truncation=True)
     return answer[0]['generated_text']
 
 # Streamlit UI setup
@@ -54,7 +56,9 @@ if uploaded_file is not None:
     query = st.text_input("Enter your query:")
 
     if query:
-        relevant_sections = search(query, sections, index)  # Search for relevant sections
-        answer = generate_answer(query, relevant_sections)  # Generate an answer
+        # Retrieve relevant sections from the document
+        relevant_sections = search(query, sections, index)
+        # Generate an answer using the relevant sections
+        answer = generate_answer(query, relevant_sections)
         st.write("**Answer:**")
         st.write(answer)  # Display the generated answer
