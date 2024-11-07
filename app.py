@@ -1,55 +1,59 @@
-import os
-import torch
-from transformers import pipeline, AutoTokenizer, AutoModelForQuestionAnswering
-import PyPDF2
 import streamlit as st
+from transformers import BertForQuestionAnswering, BertTokenizer, pipeline
+import PyPDF2
+import requests
+from io import BytesIO
+
+# Load the BERT model and tokenizer for question answering
+model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
+tokenizer = BertTokenizer.from_pretrained(model_name)
+model = BertForQuestionAnswering.from_pretrained(model_name)
+
+# Create a pipeline for QA
+qa_pipeline = pipeline('question-answering', model=model, tokenizer=tokenizer)
 
 # Function to extract text from PDF
-def extract_pdf_text(pdf_path):
-    with open(pdf_path, "rb") as f:
-        reader = PyPDF2.PdfReader(f)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
+def extract_text_from_pdf(file):
+    pdf_reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in range(len(pdf_reader.pages)):
+        text += pdf_reader.pages[page].extract_text()
     return text
 
-# Set up the model and tokenizer for DistilBERT (fine-tuned for QA)
-model_name = "distilbert-base-cased-distilled-squad"
-qa_pipeline = pipeline("question-answering", model=model_name, tokenizer=model_name)
+# Streamlit UI
+st.title('Legal Document Question Answering')
 
-# Function to answer questions using the QA model
-def answer_question(question, context):
-    result = qa_pipeline(question=question, context=context)
-    return result['answer']
+st.markdown("""
+This app allows you to upload legal documents (e.g., Companies Act 1984) in PDF format
+and ask questions related to the document. The model used is BERT-based, fine-tuned on 
+the SQuAD dataset, which allows it to answer questions based on the uploaded document.
+""")
 
-# Streamlit app interface
-def main():
-    st.title("Legal Document QA Assistant")
+# File uploader
+uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
 
-    # Upload PDF
-    uploaded_file = st.file_uploader("Choose a PDF document", type="pdf")
+if uploaded_file is not None:
+    # Extract text from the uploaded PDF
+    document_text = extract_text_from_pdf(uploaded_file)
+    st.write("Document successfully uploaded and text extracted.")
 
-    if uploaded_file is not None:
-        # Save the file temporarily
-        pdf_path = "/tmp/uploaded_document.pdf"
-        with open(pdf_path, "wb") as f:
-            f.write(uploaded_file.read())
+    # Allow the user to ask questions
+    question = st.text_input("Ask a question based on the document:")
 
-        # Extract text from the uploaded PDF
-        context = extract_pdf_text(pdf_path)
+    if question:
+        # Get the answer from the model
+        result = qa_pipeline({
+            'context': document_text,
+            'question': question
+        })
 
-        # Display a message after extraction
-        st.write("Text extraction complete. You can now ask questions based on the document.")
+        # Display the answer
+        st.write(f"Answer: {result['answer']}")
 
-        # Get user input for a question
-        question = st.text_input("Ask a question about the document:")
-
-        if question:
-            # Get the answer from the model
-            answer = answer_question(question, context)
-            st.write(f"Answer: {answer}")
-        else:
-            st.write("Please ask a question.")
-
-if __name__ == "__main__":
-    main()
+# Example instructions
+st.markdown("""
+### Example Questions:
+- "What are the key responsibilities of directors?"
+- "What is the procedure for company registration?"
+- "Explain the rules for dissolution of a company."
+""")
