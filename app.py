@@ -40,7 +40,7 @@ def extract_text_from_pdf_from_url(pdf_url):
 # Function to get the PDF URL from GitHub repo
 def get_pdf_url(doc_name):
     """Construct the URL for the PDF stored in the GitHub repository."""
-    base_url = "https://raw.githubusercontent.com/your-username/your-repo-name/main/"
+    base_url = "https://raw.githubusercontent.com/Atif-Kazmi/companies-act-hackaton/blob/main/"
     return base_url + doc_name
 
 # Streamlit UI for file selection and question input
