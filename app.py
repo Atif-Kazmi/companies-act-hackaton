@@ -1,8 +1,11 @@
 import streamlit as st
+import logging
 from transformers import BertForQuestionAnswering, BertTokenizer, pipeline
 import PyPDF2
-import requests
 from io import BytesIO
+
+# Suppress transformer-related warnings
+logging.getLogger("transformers").setLevel(logging.ERROR)
 
 # Load the BERT model and tokenizer for question answering
 model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
